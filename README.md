@@ -4,7 +4,7 @@
 > An **advanced prototype** of an enterprise agent for real-time DID verification, on-chain financial auditing, and sanctions compliance via the Chainalysis OFAC Oracle.
 
 > [!NOTE]
-> **Known Limitations:** This is an advanced prototype, not a production-grade system. The T3N ADK handshake operates in standalone mode (no real T3N account credentials). Sanctions checking uses the Chainalysis OFAC Oracle (real, on-chain) but does not cover AML/mixer exposure. KYC tiers are derived from transaction counts, not a certified KYC provider.
+> **Known Limitations:** This is an advanced prototype, not a production-grade system. A real `T3N_API_KEY` is required for production. The current testnet trust manifest is malformed upstream, so development mode uses an explicitly marked unsafe fallback and always blocks `APPROVE` decisions. Sanctions checking uses the Chainalysis OFAC Oracle (real, on-chain) but does not cover AML/mixer exposure. KYC tiers are derived from transaction counts, not a certified KYC provider.
 
 ---
 
@@ -90,7 +90,7 @@ node src/agent.js
 npm test
 ```
 
-**Expected output (7/7 tests passing):**
+**Expected output (13/13 tests passing):**
 ```
 ✔ T3EnterpriseAgent: Initialization & ADK Handshake
 ✔ DIDResolverService: Format Validation (valid and invalid)
@@ -99,8 +99,8 @@ npm test
 ✔ ComplianceService: Single-Chain Live On-Chain Audit (Sepolia)
 ✔ ComplianceService: Multi-Chain Audit returns results for each chain
 ✔ ReportGeneratorService: Generates valid structured JSON report with signature
-ℹ tests 7
-ℹ pass 7
+ℹ tests 13
+ℹ pass 13
 ℹ fail 0
 ```
 
@@ -118,7 +118,7 @@ terminal3-enterprise-agent/
 │       ├── did-resolver.js           # Real HTTP DID resolution (DIF Universal Resolver)
 │       └── report-generator.js       # Structured JSON report with SHA-256 signature
 ├── test/
-│   └── agent.test.js                 # 7 automated tests (Node.js test runner)
+│   └── agent.test.js                 # 13 automated tests (Node.js test runner)
 ├── reports/                          # Auto-generated audit JSON reports
 ├── BUG_REPORTS_AND_FEEDBACK.md       # 5 verified bugs + 2 DX improvements
 ├── SUBMISSION_DOCUMENTATION.md       # Full submission documentation
@@ -137,7 +137,7 @@ terminal3-enterprise-agent/
 | **Multi-Chain** | Concurrent audits on Sepolia, Base, Monad |
 | **Structured Reports** | JSON reports with SHA-256 integrity signature, saved to disk |
 | **Bug Evidence** | HTTP 404 from Universal Resolver for `did:t3n` (Bug #4) |
-| **Tests** | 7 automated tests with Node.js built-in test runner |
+| **Tests** | 13 automated tests with Node.js built-in test runner |
 
 ---
 
@@ -147,4 +147,14 @@ terminal3-enterprise-agent/
 T3N_API_KEY=your_real_t3n_api_key
 T3N_ENV=testnet
 T3N_AGENT_DID=did:t3n:enterprise:audit:0x...
+# Optional: configure a Terminal3-native DID resolver when available
+T3N_DID_RESOLVER_URL=https://dev.uniresolver.io/1.0/identifiers/
+# Development only; production always disables unsafe trust fallback
+T3N_ALLOW_UNSAFE_TRUST_FALLBACK=true
 ```
+
+### Production safety
+
+When `NODE_ENV=production`, the agent requires a real `T3N_API_KEY` and refuses to use the unsafe trust-anchor fallback. If the upstream trust manifest cannot be verified, initialization fails closed instead of creating a potentially trusted session. In testnet development, the fallback may be used only to exercise the rest of the workflow; reports remain capped at `REVIEW`.
+
+The DIF Universal Resolver currently returns HTTP 501 for `did:t3n` because no public resolver driver is registered. The resolver endpoint is configurable through `T3N_DID_RESOLVER_URL`, so a Terminal3-native endpoint can be adopted without a code change when one becomes available.

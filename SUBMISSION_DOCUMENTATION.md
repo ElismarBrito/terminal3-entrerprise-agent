@@ -32,7 +32,7 @@ T3EnterpriseAgent (src/agent.js)
 │   ├── SanctionsService  — Chainalysis OFAC Oracle (real on-chain, no API key)
 │   └── ethers.JsonRpcProvider — live balance, txCount, blockNumber
 │
-└── ReportGeneratorService — SHA-256 signed JSON, persisted to reports/
+└── ReportGeneratorService — SHA-256 integrity-hashed JSON, persisted to reports/
 ```
 
 ---
@@ -54,7 +54,7 @@ The agent successfully:
 - Loads the WASM enclave component via `loadWasmComponent()`
 - Authenticates with the T3N network and receives a real `tenantDid`
 
-**Note on `fetchTrustedManifest`:** Returns a malformed manifest (Bug #2). Fallback trust anchor is used. The `unsafe_trust_server: true` flag is a development-only workaround — documented as a limitation.
+**Note on `fetchTrustedManifest`:** The current testnet endpoint returns a malformed manifest. The `unsafe_trust_server: true` fallback is now explicitly limited to development. In production, initialization fails closed when the trust manifest cannot be verified.
 
 ---
 
@@ -110,7 +110,7 @@ GET https://dev.uniresolver.io/1.0/identifiers/did%3At3n%3Aenterprise%3Aaudit%3A
 
 ---
 
-## 🧪 Test Results — 12/12 Passing
+## 🧪 Test Results — 13/13 Passing
 
 ```
 ✔ T3EnterpriseAgent: Initialization & ADK Handshake (graceful fallback)
@@ -126,7 +126,9 @@ GET https://dev.uniresolver.io/1.0/identifiers/did%3At3n%3Aenterprise%3Aaudit%3A
 ✔ ReportGeneratorService: Generates valid structured JSON with SHA-256 signature
 ✔ SanctionsService: Invalid address format rejected before oracle query
 
-ℹ tests 12  |  pass 12  |  fail 0
+✔ ReportGeneratorService: Persisted JSON includes reportFile and valid integrity hash
+
+ℹ tests 13  |  pass 13  |  fail 0
 ```
 
 ---
@@ -156,7 +158,7 @@ GET https://dev.uniresolver.io/1.0/identifiers/did%3At3n%3Aenterprise%3Aaudit%3A
   }],
   "complianceDecision": "REVIEW",
   "riskScore": 30,
-  "auditSignature": "sha256:f115b521c57f85fe3b31b0c929f8aeab578f731d96ce08df72afdbeef155cf36"
+    "integrityHash": "sha256:f115b521c57f85fe3b31b0c929f8aeab578f731d96ce08df72afdbeef155cf36"
 }
 ```
 
@@ -180,7 +182,7 @@ GET https://dev.uniresolver.io/1.0/identifiers/did%3At3n%3Aenterprise%3Aaudit%3A
 |---|---|---|
 | AML/mixer exposure not detected | Requires paid Chainalysis KYT / TRM Labs | Integrate via paid API |
 | KYC not certified | Derived from txCount proxy | Integrate certified KYC provider |
-| `unsafe_trust_server: true` in dev | `fetchTrustedManifest` returns malformed data (Bug #2) | Fix upstream in T3N SDK |
+| Unsafe trust fallback in dev only | `fetchTrustedManifest` returns malformed data upstream | Fix upstream in T3N SDK; production now fails closed |
 | No DID document for `did:t3n` | Method not in DIF registry (Bug #4) | Submit driver to DIF |
 
 ---

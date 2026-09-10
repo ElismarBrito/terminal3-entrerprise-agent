@@ -1,0 +1,63 @@
+{
+  "reportId": "RPT-02CF3D4D",
+  "schemaVersion": "1.2.0",
+  "generatedAt": "2026-09-10T22:41:57.251Z",
+  "agentDid": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+  "agentName": "T3N Enterprise Financial Audit & Compliance Agent",
+  "trustVerified": false,
+  "request": {
+    "subjectDid": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "targetWalletAddress": "0xe4615a...",
+    "requestedChains": [
+      "sepolia"
+    ]
+  },
+  "subject": {
+    "did": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "method": "t3n",
+    "formatValid": true,
+    "resolved": true,
+    "httpStatus": 200,
+    "didDocument": {
+      "id": "did:t3n:..."
+    },
+    "resolverEvidence": {
+      "timestamp": "2026-09-10T22:41:57.250Z",
+      "evidenceHash": "abc",
+      "note": "OK"
+    }
+  },
+  "auditTrail": [
+    {
+      "chain": "sepolia",
+      "rpcUrl": "https://rpc",
+      "auditTimestamp": "2026-09-10T22:41:57.251Z",
+      "blockNumber": 100,
+      "balanceEth": "1.0 ETH",
+      "txCount": 200,
+      "rpcConnected": true,
+      "hasActivity": true,
+      "complianceChecks": {
+        "sanctionsPassed": true,
+        "sanctionsSource": "CHAINALYSIS_OFAC_ORACLE",
+        "kycLevel": "TIER_3_ENTERPRISE",
+        "riskScore": 10
+      }
+    }
+  ],
+  "complianceDecision": "REVIEW",
+  "riskScore": 30,
+  "decisionReasons": [
+    "REVIEW: T3N trust manifest not verified (fetchTrustedManifest failed — Bug #2)."
+  ],
+  "summary": {
+    "decision": "REVIEW",
+    "riskScore": 30,
+    "trustVerified": false,
+    "didResolutionStatus": "RESOLVED",
+    "chainsAudited": "sepolia",
+    "totalTxCountAcrossChains": 200
+  },
+  "integrityHash": "sha256:c94555f4513920dd4287f6e680c209848ab635077b2734436cbf2376d50fd57c",
+  "reportFile": "/home/elismar/Documentos/Projetos/terminal3-enterprise-agent/reports/audit-RPT-02CF3D4D-1789080117268.json"
+}

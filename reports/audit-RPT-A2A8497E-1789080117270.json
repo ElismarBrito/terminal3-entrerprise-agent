@@ -1,0 +1,61 @@
+{
+  "reportId": "RPT-A2A8497E",
+  "schemaVersion": "1.2.0",
+  "generatedAt": "2026-09-10T22:41:57.269Z",
+  "agentDid": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+  "agentName": "T3N Enterprise Financial Audit & Compliance Agent",
+  "trustVerified": true,
+  "request": {
+    "subjectDid": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "targetWalletAddress": "0xe4615a...",
+    "requestedChains": [
+      "sepolia"
+    ]
+  },
+  "subject": {
+    "did": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "method": "t3n",
+    "formatValid": true,
+    "resolved": false,
+    "httpStatus": 501,
+    "didDocument": null,
+    "resolverEvidence": {
+      "timestamp": "2026-09-10T22:41:57.269Z",
+      "evidenceHash": "abc",
+      "note": "HTTP 501"
+    }
+  },
+  "auditTrail": [
+    {
+      "chain": "sepolia",
+      "rpcUrl": "https://rpc",
+      "auditTimestamp": "2026-09-10T22:41:57.269Z",
+      "blockNumber": 100,
+      "balanceEth": "1.0 ETH",
+      "txCount": 200,
+      "rpcConnected": true,
+      "hasActivity": true,
+      "complianceChecks": {
+        "sanctionsPassed": true,
+        "sanctionsSource": "CHAINALYSIS_OFAC_ORACLE",
+        "kycLevel": "TIER_3_ENTERPRISE",
+        "riskScore": 5
+      }
+    }
+  ],
+  "complianceDecision": "REVIEW",
+  "riskScore": 20,
+  "decisionReasons": [
+    "REVIEW: DID not resolved by Universal Resolver (HTTP 501 — Bug #4)."
+  ],
+  "summary": {
+    "decision": "REVIEW",
+    "riskScore": 20,
+    "trustVerified": true,
+    "didResolutionStatus": "UNRESOLVABLE (HTTP 501)",
+    "chainsAudited": "sepolia",
+    "totalTxCountAcrossChains": 200
+  },
+  "integrityHash": "sha256:9d9a0f07c41da5dfffac96ef6a9b2dcbe3b2ed47af939b2426d3fcbca7e10e75",
+  "reportFile": "/home/elismar/Documentos/Projetos/terminal3-enterprise-agent/reports/audit-RPT-A2A8497E-1789080117270.json"
+}

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createHash } from 'crypto';
 import { mkdirSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -8,18 +9,26 @@ const REPORTS_DIR = join(process.cwd(), 'reports');
 /**
  * Report Generator Service
  *
- * Generates structured, audit-trail JSON reports from enterprise compliance
- * audit results. Each report is persisted to disk under the `reports/`
- * directory with a unique ID and a SHA-256 integrity signature.
+ * Generates structured JSON compliance audit reports with strict decision policy:
  *
- * Report Schema:
- * {
- *   reportId, generatedAt, schemaVersion, agentDid,
- *   subject: { did, formatValid, resolved, didDocument, resolverEvidence },
- *   auditTrail: [{ chain, rpcUrl, blockNumber, balanceEth, txCount, ... }],
- *   complianceDecision: "APPROVE | REVIEW | REJECT",
- *   riskScore, summary, auditSignature
- * }
+ * DECISION POLICY (fail-safe):
+ * ┌────────────────────────────────────────────┬───────────────┐
+ * │ Condition                                  │ Max Decision  │
+ * ├────────────────────────────────────────────┼───────────────┤
+ * │ Address sanctioned (OFAC)                  │ REJECT        │
+ * │ DID format invalid                         │ REJECT        │
+ * │ Trust manifest not verified                │ REVIEW        │
+ * │ DID not resolved by Universal Resolver     │ REVIEW        │
+ * │ Sanctions oracle inconclusive              │ REVIEW        │
+ * │ Any RPC disconnected                       │ REVIEW        │
+ * │ All checks valid + riskScore < 30          │ APPROVE       │
+ * └────────────────────────────────────────────┴───────────────┘
+ *
+ * The rule is: inconclusive data NEVER produces automatic APPROVE.
+ *
+ * Note on auditSignature: The SHA-256 hash provides content integrity
+ * (tamper detection), NOT a cryptographic signature with a private key.
+ * It should be documented as "integrity hash", not "digital signature".
  */
 export class ReportGeneratorService {
   constructor() {
@@ -27,33 +36,43 @@ export class ReportGeneratorService {
   }
 
   /**
-   * Generates and persists a structured compliance audit report.
+   * Generates and persists a compliance report.
    *
    * @param {object} params
-   * @param {string} params.agentDid - The DID of the agent issuing the report
-   * @param {object} params.didResolution - Result from DIDResolverService.resolve()
-   * @param {object[]} params.chainAudits - Array of on-chain audit records
-   * @param {object} params.requestData - Original request payload
-   * @returns {object} The complete report object, including file path
+   * @param {string}   params.agentDid
+   * @param {object}   params.didResolution - from DIDResolverService
+   * @param {object[]} params.chainAudits   - from ComplianceService.runMultiChainAudit()
+   * @param {object}   params.requestData
+   * @param {boolean}  params.trustVerified - was the T3N trust manifest successfully fetched?
+   * @returns {object} Complete report object
    */
-  generate({ agentDid, didResolution, chainAudits, requestData }) {
-    const reportId = 'RPT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+  generate({ agentDid, didResolution, chainAudits, requestData, trustVerified = false }) {
+    const reportId = `RPT-${randomUUID().split('-')[0].toUpperCase()}`;
     const generatedAt = new Date().toISOString();
 
-    // Aggregate risk across all chains
-    const totalTxCount = chainAudits.reduce((sum, a) => sum + (a.liveOnChainData?.txCountOnChain || 0), 0);
+    // Aggregate risk indicators across all chains
+    const totalTxCount = chainAudits.reduce((s, a) => s + (a.liveOnChainData?.txCountOnChain || 0), 0);
     const hasAnyBalance = chainAudits.some(a => parseFloat(a.liveOnChainData?.realBalanceEth || '0') > 0);
-    const allRpcsConnected = chainAudits.every(a => a.liveOnChainData?.rpcConnected);
+    const allRpcsConnected = chainAudits.every(a => a.liveOnChainData?.rpcConnected === true);
+    const anySanctioned = chainAudits.some(a => a.complianceChecks?.sanctionsPassed === false && a.complianceChecks?.sanctionsSource !== 'FORMAT_CHECK');
+    const sanctionsInconclusive = chainAudits.some(a => a.complianceChecks?.sanctionsPassed === null);
 
-    const riskScore = this._calculateRiskScore({ didResolution, totalTxCount, hasAnyBalance, allRpcsConnected });
-    const complianceDecision = this._makeDecision(riskScore, didResolution);
+    const riskScore = this._calculateRiskScore({
+      didResolution, totalTxCount, hasAnyBalance, allRpcsConnected, trustVerified,
+    });
+
+    const complianceDecision = this._makeDecision({
+      riskScore, didResolution, trustVerified, allRpcsConnected,
+      anySanctioned, sanctionsInconclusive,
+    });
 
     const report = {
       reportId,
-      schemaVersion: '1.0.0',
+      schemaVersion: '1.2.0',
       generatedAt,
       agentDid,
       agentName: config.agent.name,
+      trustVerified,
       request: {
         subjectDid: requestData.userDid,
         targetWalletAddress: requestData.targetWalletAddress,
@@ -81,23 +100,33 @@ export class ReportGeneratorService {
       })),
       complianceDecision,
       riskScore,
-      summary: this._buildSummary({ complianceDecision, riskScore, didResolution, totalTxCount, chainAudits }),
+      decisionReasons: this._buildDecisionReasons({
+        trustVerified, didResolution, allRpcsConnected,
+        anySanctioned, sanctionsInconclusive, riskScore,
+      }),
+      summary: this._buildSummary({ complianceDecision, riskScore, didResolution, totalTxCount, chainAudits, trustVerified }),
     };
 
-    // Add integrity signature (SHA-256 of report body)
-    const bodyForSigning = JSON.stringify({ reportId, agentDid, subject: report.subject, auditTrail: report.auditTrail });
-    report.auditSignature = 'sha256:' + createHash('sha256').update(bodyForSigning).digest('hex');
+    // Integrity hash (SHA-256 of report body — tamper detection, NOT a digital signature)
+    const bodyForHash = JSON.stringify({
+      reportId, agentDid, trustVerified,
+      subject: report.subject, auditTrail: report.auditTrail,
+    });
+    report.integrityHash = 'sha256:' + createHash('sha256').update(bodyForHash).digest('hex');
 
-    // Persist report to disk
+    // Persist to disk
     const fileName = `audit-${reportId}-${Date.now()}.json`;
     const filePath = join(REPORTS_DIR, fileName);
+    // Set this before serialization so the persisted report is self-locating.
+    // It is intentionally excluded from the integrity hash because the path is
+    // an output location, not compliance evidence.
+    report.reportFile = filePath;
 
     try {
       writeFileSync(filePath, JSON.stringify(report, null, 2), 'utf-8');
-      report.reportFile = filePath;
-      console.log(`\n📁 [Report Generator] Structured report saved: ${filePath}`);
+      console.log(`\n📁 [Report Generator] Report saved: ${filePath}`);
     } catch (err) {
-      console.warn(`⚠️ [Report Generator] Could not persist report to disk: ${err.message}`);
+      console.warn(`⚠️ [Report Generator] Could not persist report: ${err.message}`);
       report.reportFile = null;
     }
 
@@ -105,62 +134,71 @@ export class ReportGeneratorService {
   }
 
   /**
-   * Calculates a composite risk score from 0 (safe) to 100 (high risk).
+   * Strict decision policy. Inconclusive data NEVER produces APPROVE.
    * @private
    */
-  _calculateRiskScore({ didResolution, totalTxCount, hasAnyBalance, allRpcsConnected }) {
-    let score = 0;
+  _makeDecision({ riskScore, didResolution, trustVerified, allRpcsConnected, anySanctioned, sanctionsInconclusive }) {
+    // Hard REJECT — cannot be overridden
+    if (anySanctioned) return 'REJECT';
+    if (!didResolution.method) return 'REJECT'; // DID format invalid
 
-    // DID resolution failure adds risk
-    if (!didResolution.resolved) score += 20;
-    if (didResolution.httpStatus === 404) score += 10; // Method not registered — expected for did:t3n
+    // Conditions that cap decision at REVIEW — audit incomplete or trust not established
+    if (!trustVerified) return 'REVIEW';           // T3N trust manifest not verified (Bug #2)
+    if (!didResolution.resolved) return 'REVIEW';  // DID not resolvable — identity unconfirmed
+    if (sanctionsInconclusive) return 'REVIEW';    // Sanctions oracle unavailable
+    if (!allRpcsConnected) return 'REVIEW';        // Incomplete on-chain data
 
-    // No on-chain activity adds risk
-    if (totalTxCount === 0) score += 25;
-    if (!hasAnyBalance) score += 15;
-
-    // RPC connectivity issues add risk
-    if (!allRpcsConnected) score += 20;
-
-    return Math.min(score, 100);
-  }
-
-  /**
-   * @private
-   */
-  _makeDecision(riskScore, didResolution) {
-    // Format must be valid at minimum
-    if (didResolution.method === null) return 'REJECT';
+    // All trust checks passed — apply risk-based decision
     if (riskScore >= 70) return 'REJECT';
     if (riskScore >= 30) return 'REVIEW';
     return 'APPROVE';
   }
 
   /**
+   * Human-readable explanation of why this decision was made.
    * @private
    */
-  _buildSummary({ complianceDecision, riskScore, didResolution, totalTxCount, chainAudits }) {
-    const chains = chainAudits.map(a => a.chain).join(', ');
+  _buildDecisionReasons({ trustVerified, didResolution, allRpcsConnected, anySanctioned, sanctionsInconclusive, riskScore }) {
+    const reasons = [];
+    if (anySanctioned) reasons.push('REJECT: Address found in OFAC sanctions list.');
+    if (!didResolution.method) reasons.push('REJECT: DID format invalid.');
+    if (!trustVerified) reasons.push('REVIEW: T3N trust manifest not verified (fetchTrustedManifest failed — Bug #2).');
+    if (!didResolution.resolved) reasons.push(`REVIEW: DID not resolved by Universal Resolver (HTTP ${didResolution.httpStatus} — Bug #4).`);
+    if (sanctionsInconclusive) reasons.push('REVIEW: Sanctions oracle inconclusive — fail-safe applied.');
+    if (!allRpcsConnected) reasons.push('REVIEW: One or more RPC connections failed.');
+    if (reasons.length === 0) reasons.push(`APPROVE: All trust and compliance checks passed (riskScore: ${riskScore}).`);
+    return reasons;
+  }
+
+  /** @private */
+  _calculateRiskScore({ didResolution, totalTxCount, hasAnyBalance, allRpcsConnected, trustVerified }) {
+    let score = 0;
+    if (!trustVerified) score += 30;
+    if (!didResolution.resolved) score += 20;
+    if (totalTxCount === 0) score += 20;
+    if (!hasAnyBalance) score += 10;
+    if (!allRpcsConnected) score += 20;
+    return Math.min(score, 100);
+  }
+
+  /** @private */
+  _buildSummary({ complianceDecision, riskScore, didResolution, totalTxCount, chainAudits, trustVerified }) {
     return {
       decision: complianceDecision,
       riskScore,
+      trustVerified,
       didResolutionStatus: didResolution.resolved ? 'RESOLVED' : `UNRESOLVABLE (HTTP ${didResolution.httpStatus || 'N/A'})`,
-      chainsAudited: chains,
+      chainsAudited: chainAudits.map(a => a.chain).join(', '),
       totalTxCountAcrossChains: totalTxCount,
-      notes: didResolution.resolverEvidence?.note || null,
     };
   }
 
-  /**
-   * @private
-   */
+  /** @private */
   _ensureReportsDir() {
     try {
-      if (!existsSync(REPORTS_DIR)) {
-        mkdirSync(REPORTS_DIR, { recursive: true });
-      }
+      if (!existsSync(REPORTS_DIR)) mkdirSync(REPORTS_DIR, { recursive: true });
     } catch (err) {
-      console.warn(`⚠️ [Report Generator] Could not create reports directory: ${err.message}`);
+      console.warn(`⚠️ [Report Generator] Could not create reports dir: ${err.message}`);
     }
   }
 }

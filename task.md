@@ -2,7 +2,10 @@
 - [x] 2. Strict DID:T3N schema em `src/services/did-resolver.js`
 - [x] 3. Criar `src/services/sanctions.js` — Chainalysis OFAC oracle real
 - [x] 4. Atualizar `src/services/compliance.js` — integrar SanctionsService
-- [ ] 5. Atualizar `test/agent.test.js` — 12 testes (5 novos edge cases)
-- [ ] 6. Atualizar `README.md` e `SUBMISSION_DOCUMENTATION.md` — linguagem honesta
-- [ ] 7. `npm test` — meta: 12/12 pass
-- [ ] 8. Git commit & push
+- [x] 5. Atualizar `test/agent.test.js` — 13 testes (inclui persistência e integridade do relatório)
+- [x] 6. Atualizar `README.md` e `SUBMISSION_DOCUMENTATION.md` — linguagem honesta
+- [x] 7. `npm test` — 13/13 pass
+- [x] 8. Corrigir persistência de `reportFile` no JSON
+- [x] 9. Bloquear fallback inseguro de trust anchor em produção
+- [x] 10. Tornar o endpoint DID configurável via `T3N_DID_RESOLVER_URL`
+- [x] 11. Validar end-to-end, integridade SHA-256 e pacote final

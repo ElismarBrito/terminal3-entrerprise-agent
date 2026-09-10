@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { createHash } from 'crypto';
+import { config } from '../config.js';
 
-const UNIVERSAL_RESOLVER_BASE = 'https://dev.uniresolver.io/1.0/identifiers/';
 const RESOLVE_TIMEOUT_MS = 8000;
 
 /**
@@ -39,7 +39,7 @@ const T3N_DID_SCHEMA = {
  */
 export class DIDResolverService {
   constructor() {
-    this.resolverEndpoint = UNIVERSAL_RESOLVER_BASE;
+    this.resolverEndpoint = config.agent.didResolverUrl;
     this.resolveCache = new Map();
   }
 
@@ -170,15 +170,21 @@ export class DIDResolverService {
       };
     }
 
-    if (!address || !address.startsWith('0x') || address.length !== 42 || !ethers.isAddress(address)) {
+    // Accept both lowercase and checksummed ETH addresses;
+    // normalize via ethers.getAddress() (EIP-55 checksum).
+    // ethers.isAddress() returns true for valid hex addresses regardless of case.
+    if (!address || !address.startsWith('0x') || !ethers.isAddress(address)) {
       return {
         valid: false,
         method: 't3n',
-        reason: `Invalid did:t3n address "${address}". Must be a valid EIP-55 Ethereum address (0x + 40 hex chars).`,
+        reason: `Invalid did:t3n address "${address}". Must be a valid Ethereum address (0x + 40 hex chars).`,
       };
     }
 
-    if (!T3N_DID_SCHEMA.strictRegex.test(did)) {
+    const normalizedAddress = ethers.getAddress(address); // EIP-55 checksum normalization
+
+    if (!T3N_DID_SCHEMA.strictRegex.test(did.replace(address, normalizedAddress)) &&
+        !T3N_DID_SCHEMA.strictRegex.test(did)) {
       return {
         valid: false,
         method: 't3n',
@@ -193,7 +199,7 @@ export class DIDResolverService {
       t3nParsed: {
         realm,
         role,
-        address: ethers.getAddress(address), // checksummed
+        address: normalizedAddress, // always stored in EIP-55 checksum form
       },
     };
   }

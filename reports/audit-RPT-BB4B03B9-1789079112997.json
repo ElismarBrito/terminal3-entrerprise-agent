@@ -1,0 +1,95 @@
+{
+  "reportId": "RPT-BB4B03B9",
+  "schemaVersion": "1.2.0",
+  "generatedAt": "2026-09-10T22:25:12.995Z",
+  "agentDid": "did:t3n:9813ae09a6fcd40397b9566bac782fc221c29c4c",
+  "agentName": "T3N Enterprise Financial Audit & Compliance Agent",
+  "trustVerified": false,
+  "request": {
+    "subjectDid": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "targetWalletAddress": "0xE4615a594b7a11796CD25B5401a109bbA5855346",
+    "requestedChains": [
+      "sepolia",
+      "base"
+    ]
+  },
+  "subject": {
+    "did": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "method": "t3n",
+    "formatValid": true,
+    "resolved": false,
+    "httpStatus": 501,
+    "didDocument": null,
+    "resolverEvidence": {
+      "timestamp": "2026-09-10T22:25:12.325Z",
+      "evidenceHash": "3fa11b5941c919b6",
+      "rawResponse": {
+        "didDocument": null,
+        "didResolutionMetadata": {
+          "error": {
+            "type": "METHOD_NOT_SUPPORTED",
+            "title": "The DID method is not supported.",
+            "detail": "Method not supported: t3n"
+          }
+        },
+        "didDocumentMetadata": {}
+      },
+      "note": "HTTP 501 — \"did:t3n\" method driver NOT registered in DIF Universal Resolver (Bug #4). HTTP 501 means the resolver exists but has no driver for this method."
+    }
+  },
+  "auditTrail": [
+    {
+      "chain": "sepolia",
+      "rpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
+      "auditTimestamp": "2026-09-10T22:25:12.328Z",
+      "blockNumber": 11677832,
+      "balanceEth": "1.178703280086735668 ETH",
+      "txCount": 28,
+      "rpcConnected": true,
+      "hasActivity": true,
+      "complianceChecks": {
+        "sanctionsPassed": true,
+        "sanctionsSource": "CHAINALYSIS_OFAC_ORACLE",
+        "sanctionsOracleQueried": true,
+        "sanctionsNote": "✅ Address not found in OFAC sanctions list (Chainalysis Oracle).",
+        "kycLevel": "TIER_2_STANDARD",
+        "kycBasis": "28 transactions on-chain",
+        "riskScore": 10
+      }
+    },
+    {
+      "chain": "base",
+      "rpcUrl": "https://base-sepolia-rpc.publicnode.com",
+      "auditTimestamp": "2026-09-10T22:25:12.333Z",
+      "blockNumber": 46655412,
+      "balanceEth": "0.0 ETH",
+      "txCount": 0,
+      "rpcConnected": true,
+      "hasActivity": false,
+      "complianceChecks": {
+        "sanctionsPassed": true,
+        "sanctionsSource": "CHAINALYSIS_OFAC_ORACLE",
+        "sanctionsOracleQueried": true,
+        "sanctionsNote": "✅ Address not found in OFAC sanctions list (Chainalysis Oracle).",
+        "kycLevel": "UNVERIFIED",
+        "kycBasis": "No on-chain activity detected",
+        "riskScore": 50
+      }
+    }
+  ],
+  "complianceDecision": "REVIEW",
+  "riskScore": 50,
+  "decisionReasons": [
+    "REVIEW: T3N trust manifest not verified (fetchTrustedManifest failed — Bug #2).",
+    "REVIEW: DID not resolved by Universal Resolver (HTTP 501 — Bug #4)."
+  ],
+  "summary": {
+    "decision": "REVIEW",
+    "riskScore": 50,
+    "trustVerified": false,
+    "didResolutionStatus": "UNRESOLVABLE (HTTP 501)",
+    "chainsAudited": "sepolia, base",
+    "totalTxCountAcrossChains": 28
+  },
+  "integrityHash": "sha256:e3b11ecd6b8663867c6db20ace072389b0a3529b92f9c39fd6b7512e898ecc21"
+}

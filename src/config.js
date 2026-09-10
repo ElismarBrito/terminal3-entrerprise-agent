@@ -3,30 +3,37 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 /**
- * Derives a valid Ethereum private key for T3N ADK use.
+ * Resolves the T3N ADK API key.
  *
- * The T3N SDK's `eth_get_address(apiKey)` treats the API key as an
- * Ethereum private key (32-byte hex). When no real T3N_API_KEY is set,
- * we generate a deterministic test wallet so the SDK can advance past
- * the key-format validation step and reach the network handshake stage.
+ * The T3N SDK's `eth_get_address(apiKey)` treats the key as an Ethereum private key.
+ * When no real T3N_API_KEY is set:
+ *   - In TEST/DEV: generates a random wallet so the SDK can advance to network auth.
+ *   - In PRODUCTION: throws immediately — a real key is mandatory.
  *
- * NOTE: Without a real T3N account, adkConnected will still be false —
- * but the error will be "Authentication failed" (network rejection),
- * not "Invalid Ethereum private key" (format error). This is a stronger
- * proof of integration than a key-format failure.
+ * To obtain a real API key: https://go.terminal3.io/adk-community
  */
 function resolveAdkKey() {
   const envKey = process.env.T3N_API_KEY;
+
+  if (!envKey && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[Config] T3N_API_KEY is required in production. ' +
+      'Set it via: export T3N_API_KEY="<your-key-from-terminal3.io>"\n' +
+      'NEVER commit your API key to Git or include it in documentation.'
+    );
+  }
+
   if (envKey && envKey.startsWith('0x') && envKey.length === 66) {
-    return envKey; // Real 32-byte ETH private key provided
+    return envKey; // Valid 32-byte ETH private key
   }
-  if (envKey && envKey.startsWith('0x') && envKey.length !== 66) {
-    console.warn('[Config] T3N_API_KEY looks like an ETH key but wrong length — generating test wallet.');
-  }
-  // Generate deterministic dev wallet (same across runs in same process)
+
+  // Dev/test mode: generate a random wallet for SDK handshake testing
   const testWallet = ethers.Wallet.createRandom();
   if (!envKey) {
-    console.warn(`[Config] No T3N_API_KEY set. Using generated test wallet: ${testWallet.address} (dev mode)`);
+    console.warn(
+      `[Config] No T3N_API_KEY set — using generated dev wallet: ${testWallet.address}\n` +
+      `[Config] Set T3N_API_KEY=<real-key> for production use.`
+    );
   }
   return testWallet.privateKey;
 }
@@ -35,20 +42,30 @@ export const config = {
   t3n: {
     apiKey: resolveAdkKey(),
     environment: process.env.T3N_ENV || 'testnet',
-    // NOTE: unsafe_trust_server is a development-only fallback.
-    // In production, fetchTrustedManifest() must succeed and this must be removed.
+    // Unsafe trust fallback is development-only and must be explicitly disabled
+    // in production, even when a real API key is present.
+    allowUnsafeTrustFallback: process.env.NODE_ENV !== 'production' && process.env.T3N_ALLOW_UNSAFE_TRUST_FALLBACK !== 'false',
+    /**
+     * KNOWN LIMITATION (Bug #2 in BUG_REPORTS_AND_FEEDBACK.md):
+     * fetchTrustedManifest() returns a malformed manifest from the T3N testnet cluster.
+     * This fallback is ONLY used when the manifest fetch fails.
+     * When fallback is active, trustVerified = false and APPROVE decisions are blocked.
+     * Remove this fallback and replace with a hard failure once Bug #2 is resolved upstream.
+     */
     fallbackTrustAnchor: { unsafe_trust_server: true },
   },
   agent: {
     name: 'T3N Enterprise Financial Audit & Compliance Agent',
-    version: '1.1.0',
+    version: '1.2.0',
     agentDid: process.env.T3N_AGENT_DID || 'did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC',
     supportedChains: {
       sepolia: 'https://ethereum-sepolia-rpc.publicnode.com',
       base: 'https://base-sepolia-rpc.publicnode.com',
       monad: 'https://rpc-testnet.monad.xyz',
     },
-    // Ethereum mainnet RPC for sanctions oracle (read-only, no API key needed)
+    // The DIF Universal Resolver is the default. A T3N-native resolver can be
+    // supplied without changing code when Terminal3 exposes a public endpoint.
+    didResolverUrl: process.env.T3N_DID_RESOLVER_URL || 'https://dev.uniresolver.io/1.0/identifiers/',
     mainnetRpc: 'https://ethereum-rpc.publicnode.com',
   },
 };

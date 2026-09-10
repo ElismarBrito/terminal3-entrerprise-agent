@@ -1,0 +1,43 @@
+{
+  "reportId": "RPT-AE81B99F",
+  "schemaVersion": "1.2.0",
+  "generatedAt": "2026-09-10T22:35:54.988Z",
+  "agentDid": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+  "agentName": "T3N Enterprise Financial Audit & Compliance Agent",
+  "trustVerified": false,
+  "request": {
+    "subjectDid": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "targetWalletAddress": "0xe4615a...",
+    "requestedChains": []
+  },
+  "subject": {
+    "did": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "method": "t3n",
+    "formatValid": true,
+    "resolved": false,
+    "httpStatus": 501,
+    "didDocument": null,
+    "resolverEvidence": {
+      "timestamp": "2026-09-10T22:35:54.988Z",
+      "evidenceHash": "abc",
+      "note": "HTTP 501"
+    }
+  },
+  "auditTrail": [],
+  "complianceDecision": "REVIEW",
+  "riskScore": 80,
+  "decisionReasons": [
+    "REVIEW: T3N trust manifest not verified (fetchTrustedManifest failed — Bug #2).",
+    "REVIEW: DID not resolved by Universal Resolver (HTTP 501 — Bug #4)."
+  ],
+  "summary": {
+    "decision": "REVIEW",
+    "riskScore": 80,
+    "trustVerified": false,
+    "didResolutionStatus": "UNRESOLVABLE (HTTP 501)",
+    "chainsAudited": "",
+    "totalTxCountAcrossChains": 0
+  },
+  "integrityHash": "sha256:97629cddfea10720947c3fb2f0af308b9e44c6aeaa83de26fff52609a6165134",
+  "reportFile": "/tmp/terminal3-enterprise-agent/terminal3-enterprise-agent/reports/audit-RPT-AE81B99F-1789079754988.json"
+}
