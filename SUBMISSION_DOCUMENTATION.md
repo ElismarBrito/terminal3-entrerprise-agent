@@ -3,8 +3,8 @@
 
 **Submitter Name:** Elismar  
 **Telegram:** @wardumb / Superteam Community Submission  
-**GitHub Repository:** `https://github.com/elismar-brito/terminal3-enterprise-agent`  
-**Public Document URL:** [Google Docs Public Submission Document]  
+**GitHub Repository:** `https://github.com/ElismarBrito/terminal3-entrerprise-agent`  
+**Public Document URL:** `https://docs.google.com/document/d/1er4u9MIbHglwJv62DgeQHzH47ipA6BjV8U0RhSRMjDI/edit?usp=sharing`  
 **Post-Challenge Status:** "I intend to continue managing and expanding this Enterprise Agent project on Terminal 3."  
 
 ---
