@@ -1,0 +1,54 @@
+{
+  "reportId": "RPT-PWPOEN1",
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-09-10T21:21:20.964Z",
+  "agentDid": "did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+  "agentName": "T3N Enterprise Financial Audit & Compliance Agent",
+  "request": {
+    "subjectDid": "did:t3n:enterprise:user:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "targetWalletAddress": "0xe4615a594b7a11796cd25b5401a109bba5855346",
+    "requestedChains": [
+      "sepolia"
+    ]
+  },
+  "subject": {
+    "did": "did:t3n:enterprise:user:0x909F5A24F4f3353A823Bed637410D21E6521BAEC",
+    "method": "t3n",
+    "formatValid": true,
+    "resolved": false,
+    "httpStatus": 404,
+    "didDocument": null,
+    "resolverEvidence": {
+      "timestamp": "2026-09-10T21:21:20.964Z",
+      "evidenceHash": "abc123",
+      "note": "HTTP 404 — did:t3n not registered in Universal Resolver (Bug #4)"
+    }
+  },
+  "auditTrail": [
+    {
+      "chain": "sepolia",
+      "rpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
+      "auditTimestamp": "2026-09-10T21:21:20.964Z",
+      "blockNumber": 7654321,
+      "balanceEth": "0.5 ETH",
+      "txCount": 42,
+      "rpcConnected": true,
+      "hasActivity": true,
+      "complianceChecks": {
+        "kycLevel": "TIER_3_ENTERPRISE",
+        "riskScore": 10
+      }
+    }
+  ],
+  "complianceDecision": "REVIEW",
+  "riskScore": 30,
+  "summary": {
+    "decision": "REVIEW",
+    "riskScore": 30,
+    "didResolutionStatus": "UNRESOLVABLE (HTTP 404)",
+    "chainsAudited": "sepolia",
+    "totalTxCountAcrossChains": 42,
+    "notes": "HTTP 404 — did:t3n not registered in Universal Resolver (Bug #4)"
+  },
+  "auditSignature": "sha256:8e5f191cce46fbb2486435591269fdfed5574d28d27b98a04b784f33820cf548"
+}
