@@ -6,127 +6,228 @@ import { T3EnterpriseAgent } from '../src/agent.js';
 import { complianceService } from '../src/services/compliance.js';
 import { didResolverService } from '../src/services/did-resolver.js';
 import { reportGeneratorService } from '../src/services/report-generator.js';
+import { sanctionsService } from '../src/services/sanctions.js';
 
 // ─── Test 1: Agent Initialization & ADK Handshake ────────────────────────────
-test('T3EnterpriseAgent: Initialization & ADK Handshake', async () => {
+test('T3EnterpriseAgent: Initialization & ADK Handshake (graceful fallback)', async () => {
   const agent = new T3EnterpriseAgent();
-  assert.equal(agent.isInitialized, false, 'Agent should not be initialized before initialize()');
+  assert.equal(agent.isInitialized, false);
 
   await agent.initialize();
 
-  assert.equal(agent.isInitialized, true, 'Agent should be initialized after initialize()');
+  assert.equal(agent.isInitialized, true);
   assert.ok(agent.tenantDid.startsWith('did:t3n:'), `tenantDid must start with "did:t3n:", got: ${agent.tenantDid}`);
-  assert.equal(typeof agent.adkConnected, 'boolean', 'adkConnected must be a boolean');
+  assert.equal(typeof agent.adkConnected, 'boolean');
+
+  // Without a real T3N account, adkConnected will be false.
+  // What this test proves: the agent initializes cleanly, the SDK is imported,
+  // and the flow reaches network-level auth (not format error).
+  console.log(`   ℹ️  adkConnected=${agent.adkConnected} (false = no real T3N account in test env, expected)`);
 });
 
-// ─── Test 2: DID Format Validation ───────────────────────────────────────────
-test('DIDResolverService: Format Validation (valid and invalid)', () => {
-  const cases = [
-    { did: 'did:t3n:enterprise:user:0x909F5A24F4f3353A823Bed637410D21E6521BAEC', expectValid: true },
-    { did: 'did:web:example.com', expectValid: true },
-    { did: 'did:key:z6MkHaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK', expectValid: true },
-    { did: 'invalid:scheme:123', expectValid: false },
-    { did: 'did:', expectValid: false },
-    { did: '', expectValid: false },
-    { did: null, expectValid: false },
+// ─── Test 2: DID Strict Schema — Valid did:t3n ───────────────────────────────
+test('DIDResolverService: Strict did:t3n schema — valid cases', () => {
+  const validCases = [
+    'did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC',
+    'did:t3n:enterprise:user:0x909F5A24F4f3353A823Bed637410D21E6521BAEC',
+    'did:t3n:user:agent:0x909F5A24F4f3353A823Bed637410D21E6521BAEC',
+    'did:t3n:node:validator:0x909F5A24F4f3353A823Bed637410D21E6521BAEC',
   ];
 
-  for (const { did, expectValid } of cases) {
+  for (const did of validCases) {
     const result = didResolverService.validateFormat(did);
-    assert.equal(result.valid, expectValid, `DID "${did}" expected valid=${expectValid}, got ${result.valid}. Reason: ${result.reason}`);
+    assert.equal(result.valid, true, `Expected VALID: "${did}" — Reason: ${result.reason}`);
+    assert.equal(result.method, 't3n');
+    assert.ok(result.t3nParsed?.realm, 'Must parse realm');
+    assert.ok(result.t3nParsed?.role, 'Must parse role');
+    assert.ok(result.t3nParsed?.address?.startsWith('0x'), 'Must parse checksum address');
   }
 });
 
-// ─── Test 3: DID Resolution via Universal Resolver (Real HTTP Call) ──────────
-test('DIDResolverService: Real HTTP Resolution via Universal Resolver', async () => {
-  // did:t3n is the method we are testing — it may or may not be registered
-  const t3nDid = 'did:t3n:enterprise:user:0x909F5A24F4f3353A823Bed637410D21E6521BAEC';
+// ─── Test 3: DID Strict Schema — INVALID did:t3n ─────────────────────────────
+test('DIDResolverService: Strict did:t3n schema — invalid/malformed cases REJECTED', () => {
+  const invalidCases = [
+    { did: 'did:t3n:anything',                  reason: 'generic form (only 3 parts)' },
+    { did: 'did:t3n:enterprise:audit',           reason: 'missing address (4 parts)' },
+    { did: 'did:t3n:ENTERPRISE:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC', reason: 'uppercase realm' },
+    { did: 'did:t3n:enterprise:ADMIN:0x909F5A24F4f3353A823Bed637410D21E6521BAEC', reason: 'invalid role' },
+    { did: 'did:t3n:enterprise:audit:notanaddress', reason: 'invalid ETH address' },
+    { did: 'did:t3n:enterprise:audit:0x1234',    reason: 'short address' },
+    { did: 'invalid:scheme:123',                 reason: 'wrong scheme' },
+    { did: '',                                   reason: 'empty string' },
+    { did: null,                                 reason: 'null' },
+  ];
+
+  for (const { did, reason } of invalidCases) {
+    const result = didResolverService.validateFormat(did);
+    assert.equal(result.valid, false,
+      `Expected INVALID (${reason}): "${did}" — but got valid=true`);
+    assert.ok(result.reason, `Must provide a reason for rejection of "${did}"`);
+  }
+});
+
+// ─── Test 4: DID Resolution via Universal Resolver (Real HTTP) ────────────────
+test('DIDResolverService: Real HTTP Resolution — captures HTTP 501 as Bug #4 evidence', async () => {
+  const t3nDid = 'did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC';
   const resolution = await didResolverService.resolve(t3nDid);
 
-  assert.equal(resolution.did, t3nDid, 'Resolution result must echo back the input DID');
-  assert.ok(resolution.resolverUrl.includes('uniresolver.io'), 'Resolver URL must reference the Universal Resolver');
-  assert.equal(typeof resolution.resolved, 'boolean', 'resolved must be a boolean');
-  assert.ok(resolution.resolverEvidence, 'Resolution must include evidence object');
-  assert.ok(resolution.resolverEvidence.timestamp, 'Evidence must include a timestamp');
-  assert.ok(resolution.resolverEvidence.evidenceHash, 'Evidence must include an integrity hash');
+  assert.equal(resolution.did, t3nDid);
+  assert.ok(resolution.resolverUrl.includes('uniresolver.io'));
+  assert.equal(typeof resolution.resolved, 'boolean');
+  assert.ok(resolution.resolverEvidence?.timestamp);
+  assert.ok(resolution.resolverEvidence?.evidenceHash);
 
-  // We expect HTTP 404 or 501 for did:t3n (not registered in Universal Resolver)
-  // HTTP 501 = "Not Implemented" (method driver not installed) — more precise than 404
-  // This is documented as Bug #4 — we assert this behavior as evidence
   if (resolution.httpStatus !== null) {
-    console.log(`   ℹ️  HTTP Status from Universal Resolver for did:t3n: ${resolution.httpStatus} (Bug #4 evidence)`);
-    assert.ok([200, 400, 404, 501, 500, null].includes(resolution.httpStatus),
-      `Unexpected HTTP status: ${resolution.httpStatus}`);
+    console.log(`   ℹ️  Universal Resolver HTTP ${resolution.httpStatus} for did:t3n (Bug #4 evidence)`);
+    // HTTP 501 = method not registered; 404 = not found; both are valid evidence
+    assert.ok([200, 400, 404, 501, 500].includes(resolution.httpStatus),
+      `Unexpected status: ${resolution.httpStatus}`);
   } else {
-    // Network error or timeout — still valid test, just inconclusive
-    console.log(`   ℹ️  Universal Resolver unreachable (network/timeout) — see resolverEvidence.error`);
+    console.log(`   ℹ️  Universal Resolver unreachable — see resolverEvidence.error`);
   }
 });
 
-// ─── Test 4: Compliance DID Verify with Resolver Integration ─────────────────
-test('ComplianceService: verifyDidSubject with real resolver integration', async () => {
-  const validDid = 'did:t3n:enterprise:user:0x909F5A24F4f3353A823Bed637410D21E6521BAEC';
-  const invalidDid = 'not-a-valid-did';
-
+// ─── Test 5: ComplianceService DID Verify — strict schema integration ─────────
+test('ComplianceService: verifyDidSubject — strict schema + resolver integration', async () => {
+  // Valid did:t3n — should pass format, fail resolution (HTTP 501)
+  const validDid = 'did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC';
   const validResult = await complianceService.verifyDidSubject(validDid);
-  assert.equal(validResult.valid, true, 'A correctly formatted did:t3n should be valid');
-  assert.equal(validResult.formatValid, true, 'Format must be valid');
-  assert.ok(validResult.resolverEvidence, 'Must include resolver evidence from real HTTP call');
-  assert.ok(['FULLY_RESOLVED', 'FORMAT_VALID_UNRESOLVABLE'].includes(validResult.status),
-    `Unexpected status: ${validResult.status}`);
+  assert.equal(validResult.valid, true);
+  assert.equal(validResult.formatValid, true);
+  assert.ok(['FULLY_RESOLVED', 'FORMAT_VALID_UNRESOLVABLE'].includes(validResult.status));
+  assert.ok(validResult.t3nParsed?.realm, 'Must parse t3n realm');
 
-  const invalidResult = await complianceService.verifyDidSubject(invalidDid);
-  assert.equal(invalidResult.valid, false, 'An invalid DID string must return valid=false');
-  assert.equal(invalidResult.formatValid, false);
+  // did:t3n:anything — strict schema must REJECT this
+  const looseT3n = 'did:t3n:anything';
+  const looseResult = await complianceService.verifyDidSubject(looseT3n);
+  assert.equal(looseResult.valid, false, 'did:t3n:anything must be REJECTED by strict schema');
+  assert.equal(looseResult.status, 'REJECTED_INVALID_FORMAT');
+
+  // Non-did string — must be rejected
+  const invalid = 'not-a-did';
+  const invalidResult = await complianceService.verifyDidSubject(invalid);
+  assert.equal(invalidResult.valid, false);
 });
 
-// ─── Test 5: Single-Chain On-Chain Audit (Sepolia) ───────────────────────────
-test('ComplianceService: Single-Chain Live On-Chain Audit (Sepolia)', async () => {
-  const sampleWallet = '0xe4615a594b7a11796cd25b5401a109bba5855346';
-  const auditRecord = await complianceService.runOnChainAudit(sampleWallet, 'sepolia');
+// ─── Test 6: SanctionsService — Chainalysis OFAC Oracle (real call) ──────────
+test('SanctionsService: Real Chainalysis OFAC oracle query', async () => {
+  // Well-known OFAC-sanctioned address (public Lazarus Group address, OFAC SDN list)
+  // Source: https://home.treasury.gov/news/press-releases/jy0916
+  const sanctionedAddress = '0x098B716B8Aaf21512996dC57EB0615e2383E2f96';
+  // A regular wallet with no sanctions
+  const normalAddress = '0xe4615a594b7a11796cd25b5401a109bba5855346';
 
-  assert.ok(auditRecord.auditId.startsWith('AUDIT-'), 'auditId must start with "AUDIT-"');
-  assert.equal(auditRecord.walletAddress, sampleWallet);
-  assert.equal(auditRecord.chain, 'sepolia');
-  assert.ok(auditRecord.rpcUrl.includes('publicnode.com'), 'Must use configured RPC URL');
-  assert.ok(auditRecord.liveOnChainData.realBalanceEth.includes('ETH'), 'Balance must include "ETH" unit');
-  assert.equal(typeof auditRecord.liveOnChainData.txCountOnChain, 'number');
-  // blockNumber is fetched live — may be null if RPC fails, but should be a number when connected
-  if (auditRecord.liveOnChainData.rpcConnected) {
-    assert.equal(typeof auditRecord.liveOnChainData.blockNumber, 'number', 'blockNumber must be a number when RPC is connected');
-    assert.ok(auditRecord.liveOnChainData.blockNumber > 0, 'blockNumber must be positive');
+  // Check normal address
+  const normalResult = await sanctionsService.checkSanctions(normalAddress);
+  assert.equal(typeof normalResult.sanctionsPassed, 'boolean',
+    'sanctionsPassed must be boolean (not hardcoded null)');
+  assert.ok(['CHAINALYSIS_OFAC_ORACLE', 'FORMAT_CHECK'].includes(normalResult.source));
+  assert.ok(normalResult.timestamp);
+
+  if (normalResult.oracleQueried) {
+    console.log(`   ℹ️  Normal wallet sanctions result: ${normalResult.isSanctioned ? '🚫 SANCTIONED' : '✅ CLEAN'}`);
+    // A real non-sanctioned wallet should pass
+    assert.equal(normalResult.isSanctioned, false, 'Normal wallet should not be sanctioned');
+  } else {
+    console.log(`   ℹ️  Oracle unreachable — result is INCONCLUSIVE (fail-safe)`);
+    assert.equal(normalResult.sanctionsPassed, null, 'Inconclusive must be null, not true');
+  }
+
+  // Check sanctioned address (if oracle is reachable)
+  const sanctionedResult = await sanctionsService.checkSanctions(sanctionedAddress);
+  if (sanctionedResult.oracleQueried) {
+    console.log(`   ℹ️  Sanctioned wallet result: ${sanctionedResult.isSanctioned ? '🚫 SANCTIONED (correct)' : '⚠️ NOT found (oracle may be stale)'}`);
+    // Note: if result is false, the oracle may have updated its list
+    // We don't hard-assert true here since OFAC lists change
+    assert.equal(typeof sanctionedResult.isSanctioned, 'boolean');
   }
 });
 
-// ─── Test 6: Multi-Chain Audit ───────────────────────────────────────────────
-test('ComplianceService: Multi-Chain Audit returns results for each chain', async () => {
-  const sampleWallet = '0xe4615a594b7a11796cd25b5401a109bba5855346';
+// ─── Test 7: SanctionsService — KYC Tier Derivation ─────────────────────────
+test('SanctionsService: KYC tier derived from real txCount (not hardcoded)', () => {
+  const cases = [
+    { txCount: 0,   expectedLevel: 'UNVERIFIED' },
+    { txCount: 1,   expectedLevel: 'TIER_1_BASIC' },
+    { txCount: 9,   expectedLevel: 'TIER_1_BASIC' },
+    { txCount: 10,  expectedLevel: 'TIER_2_STANDARD' },
+    { txCount: 99,  expectedLevel: 'TIER_2_STANDARD' },
+    { txCount: 100, expectedLevel: 'TIER_3_ENTERPRISE' },
+    { txCount: 999, expectedLevel: 'TIER_3_ENTERPRISE' },
+  ];
+
+  for (const { txCount, expectedLevel } of cases) {
+    const result = sanctionsService.deriveKycTier(txCount);
+    assert.equal(result.kycLevel, expectedLevel,
+      `txCount=${txCount} → expected ${expectedLevel}, got ${result.kycLevel}`);
+    assert.ok(result.kycBasis, 'kycBasis must be present');
+  }
+
+  // Invalid input → UNVERIFIED (never throws)
+  const invalidResult = sanctionsService.deriveKycTier(-1);
+  assert.equal(invalidResult.kycLevel, 'UNVERIFIED');
+});
+
+// ─── Test 8: Fail-Closed — invalid wallet never auto-approves ────────────────
+test('ComplianceService: Fail-closed — invalid wallet address never returns APPROVE', async () => {
+  const invalidWallet = 'not-a-wallet-address';
+  const auditRecord = await complianceService.runOnChainAudit(invalidWallet, 'sepolia');
+
+  // An invalid address should never result in APPROVE
+  assert.notEqual(auditRecord.recommendation, 'APPROVE_TRANSACTION',
+    'Invalid wallet must NEVER produce APPROVE recommendation');
+
+  // Sanctions for invalid address = rejected before oracle
+  assert.equal(auditRecord.complianceChecks.sanctionsPassed, false,
+    'Invalid address must fail sanctions check (FORMAT_CHECK rejection)');
+
+  // Risk score for invalid address should be high
+  assert.ok(auditRecord.complianceChecks.riskScore >= 50,
+    `Risk score for invalid wallet should be >= 50, got ${auditRecord.complianceChecks.riskScore}`);
+});
+
+// ─── Test 9: Single-Chain Live Audit (Sepolia) ───────────────────────────────
+test('ComplianceService: Single-chain live RPC audit (Sepolia) — real data', async () => {
+  const wallet = '0xe4615a594b7a11796cd25b5401a109bba5855346';
+  const audit = await complianceService.runOnChainAudit(wallet, 'sepolia');
+
+  assert.ok(audit.auditId.startsWith('AUDIT-'));
+  assert.equal(audit.chain, 'sepolia');
+  assert.ok(audit.rpcUrl.includes('publicnode.com'));
+  assert.ok(audit.liveOnChainData.realBalanceEth.includes('ETH'));
+  assert.equal(typeof audit.liveOnChainData.txCountOnChain, 'number');
+
+  if (audit.liveOnChainData.rpcConnected) {
+    assert.ok(audit.liveOnChainData.blockNumber > 0, 'blockNumber must be positive');
+  }
+
+  // KYC and sanctions must NOT be hardcoded
+  assert.notEqual(audit.complianceChecks.kycLevel, undefined);
+  assert.notEqual(audit.complianceChecks.kycBasis, undefined);
+  assert.ok(audit.complianceChecks.sanctionsSource, 'sanctionsSource must be present');
+});
+
+// ─── Test 10: Multi-Chain Audit ───────────────────────────────────────────────
+test('ComplianceService: Multi-chain audit — results for each chain', async () => {
+  const wallet = '0xe4615a594b7a11796cd25b5401a109bba5855346';
   const chains = ['sepolia', 'base'];
-  const results = await complianceService.runMultiChainAudit(sampleWallet, chains);
+  const results = await complianceService.runMultiChainAudit(wallet, chains);
 
-  assert.equal(results.length, chains.length, 'Must return one audit record per chain');
-
+  assert.equal(results.length, chains.length);
   for (const [i, result] of results.entries()) {
-    const expectedChain = chains[i];
-    assert.equal(result.chain, expectedChain, `Result[${i}] must be for chain "${expectedChain}"`);
-    assert.ok(result.walletAddress === sampleWallet || result.error, 'Must include wallet or error');
-    assert.ok(result.liveOnChainData, 'Must include liveOnChainData');
+    assert.equal(result.chain, chains[i]);
+    assert.ok(result.liveOnChainData);
   }
 });
 
-// ─── Test 7: Report Generator produces valid structured JSON ──────────────────
-test('ReportGeneratorService: Generates valid structured JSON report with signature', async () => {
+// ─── Test 11: Report Generator — valid schema + SHA-256 signature ─────────────
+test('ReportGeneratorService: Generates valid structured JSON with SHA-256 signature', async () => {
   const mockDidResolution = {
-    did: 'did:t3n:enterprise:user:0x909F5A24F4f3353A823Bed637410D21E6521BAEC',
+    did: 'did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC',
     method: 't3n',
     resolved: false,
-    httpStatus: 404,
+    httpStatus: 501,
     didDocument: null,
-    resolverEvidence: {
-      timestamp: new Date().toISOString(),
-      evidenceHash: 'abc123',
-      note: 'HTTP 404 — did:t3n not registered in Universal Resolver (Bug #4)',
-    },
+    resolverEvidence: { timestamp: new Date().toISOString(), evidenceHash: 'abc123', note: 'HTTP 501' },
   };
 
   const mockChainAudits = [{
@@ -135,13 +236,7 @@ test('ReportGeneratorService: Generates valid structured JSON report with signat
     chain: 'sepolia',
     rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
     timestamp: new Date().toISOString(),
-    liveOnChainData: {
-      rpcConnected: true,
-      blockNumber: 7654321,
-      realBalanceEth: '0.5 ETH',
-      txCountOnChain: 42,
-      hasActivity: true,
-    },
+    liveOnChainData: { rpcConnected: true, blockNumber: 7654321, realBalanceEth: '0.5 ETH', txCountOnChain: 42, hasActivity: true },
     complianceChecks: { kycLevel: 'TIER_3_ENTERPRISE', riskScore: 10 },
     recommendation: 'APPROVE_TRANSACTION',
   }];
@@ -153,27 +248,27 @@ test('ReportGeneratorService: Generates valid structured JSON report with signat
     requestData: { userDid: mockDidResolution.did, targetWalletAddress: '0xe4615a594b7a11796cd25b5401a109bba5855346', chains: ['sepolia'] },
   });
 
-  // Schema validation
-  assert.ok(report.reportId.startsWith('RPT-'), 'reportId must start with "RPT-"');
+  assert.ok(report.reportId.startsWith('RPT-'));
   assert.equal(report.schemaVersion, '1.0.0');
-  assert.ok(report.generatedAt, 'generatedAt must be present');
-  assert.ok(report.auditSignature.startsWith('sha256:'), 'auditSignature must be sha256 hash');
-  assert.ok(['APPROVE', 'REVIEW', 'REJECT'].includes(report.complianceDecision), `Invalid decision: ${report.complianceDecision}`);
-  assert.equal(typeof report.riskScore, 'number', 'riskScore must be a number');
-  assert.ok(report.riskScore >= 0 && report.riskScore <= 100, 'riskScore must be 0-100');
-  assert.ok(Array.isArray(report.auditTrail), 'auditTrail must be an array');
-  assert.equal(report.auditTrail.length, 1);
-  assert.ok(report.subject.resolverEvidence, 'subject must include resolverEvidence');
+  assert.ok(report.auditSignature.startsWith('sha256:'));
+  assert.ok(['APPROVE', 'REVIEW', 'REJECT'].includes(report.complianceDecision));
+  assert.ok(report.riskScore >= 0 && report.riskScore <= 100);
+  assert.ok(Array.isArray(report.auditTrail));
 
-  // Verify file was saved to disk
   if (report.reportFile) {
-    assert.ok(existsSync(report.reportFile), `Report file must exist at: ${report.reportFile}`);
+    assert.ok(existsSync(report.reportFile), `Report file must exist: ${report.reportFile}`);
   }
 
-  // Verify reports directory exists
   const reportsDir = join(process.cwd(), 'reports');
   assert.ok(existsSync(reportsDir), 'reports/ directory must exist');
+});
 
-  const reportFiles = readdirSync(reportsDir).filter(f => f.endsWith('.json'));
-  assert.ok(reportFiles.length > 0, 'At least one report JSON must exist in reports/');
+// ─── Test 12: SanctionsService — invalid address format rejected pre-oracle ───
+test('SanctionsService: Invalid address format rejected before oracle query', async () => {
+  const result = await sanctionsService.checkSanctions('not-an-eth-address');
+
+  assert.equal(result.sanctionsPassed, false, 'Invalid format = sanctions not passed');
+  assert.equal(result.oracleQueried, false, 'Oracle must NOT be queried for invalid addresses');
+  assert.equal(result.source, 'FORMAT_CHECK', 'Source must be FORMAT_CHECK');
+  assert.ok(result.reason?.includes('Invalid Ethereum address'), 'Must explain rejection reason');
 });

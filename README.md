@@ -1,7 +1,10 @@
 # T3N Enterprise Financial Audit & Compliance Agent
 
 > **Terminal 3 (T3N) ADK Community Bounty Submission**  
-> A production-ready enterprise agent for real-time DID verification and on-chain financial compliance auditing.
+> An **advanced prototype** of an enterprise agent for real-time DID verification, on-chain financial auditing, and sanctions compliance via the Chainalysis OFAC Oracle.
+
+> [!NOTE]
+> **Known Limitations:** This is an advanced prototype, not a production-grade system. The T3N ADK handshake operates in standalone mode (no real T3N account credentials). Sanctions checking uses the Chainalysis OFAC Oracle (real, on-chain) but does not cover AML/mixer exposure. KYC tiers are derived from transaction counts, not a certified KYC provider.
 
 ---
 
