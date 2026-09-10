@@ -1,25 +1,27 @@
 {
-  "name": "t3n-enterprise-audit-agent",
+  "name": "terminal3-enterprise-agent",
   "version": "1.0.0",
-  "description": "High-utility & highly-maintainable Enterprise Financial Audit & DID Verification Agent for Terminal 3 (T3N)",
+  "description": "Production-Grade Enterprise Financial Audit & DID Compliance Agent for Terminal 3 (T3N)",
+  "type": "module",
   "main": "src/agent.js",
   "scripts": {
     "start": "node src/agent.js",
-    "test": "node src/agent.js --test"
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "terminal3",
-    "t3n",
+    "t3n-sdk",
     "adk",
     "enterprise-agent",
-    "did",
+    "did-verification",
     "financial-audit",
     "web3"
   ],
-  "author": "Elismar Brito (Superteam Submission)",
+  "author": "Elismar (Superteam Submission)",
   "license": "MIT",
   "dependencies": {
-    "ethers": "^6.10.0",
-    "dotenv": "^16.4.5"
+    "@terminal3/t3n-sdk": "^5.2.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.10.0"
   }
 }

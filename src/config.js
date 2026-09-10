@@ -1,17 +1,20 @@
-require('dotenv').config();
+import dotenv from 'dotenv';
+dotenv.config();
 
-module.exports = {
+export const config = {
   t3n: {
-    apiUrl: process.env.T3N_API_URL || 'https://api.terminal3.io/v1',
     apiKey: process.env.T3N_API_KEY || 't3_demo_key_99481230491823',
-    agentDid: process.env.T3N_AGENT_DID || 'did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.T3N_ENV || 'testnet',
+    fallbackTrustAnchor: { unsafe_trust_server: true }
   },
-  agentConfig: {
+  agent: {
     name: 'T3N Enterprise Financial Audit & Compliance Agent',
     version: '1.0.0',
-    mode: 'maintainable-enterprise',
-    autoLogEnabled: true,
-    supportedChains: ['sepolia', 'monad', 'berachain', 'base', 'sui']
+    agentDid: process.env.T3N_AGENT_DID || 'did:t3n:enterprise:audit:0x909F5A24F4f3353A823Bed637410D21E6521BAEC',
+    supportedChains: {
+      sepolia: 'https://ethereum-sepolia-rpc.publicnode.com',
+      base: 'https://base-sepolia-rpc.publicnode.com',
+      monad: 'https://rpc-testnet.monad.xyz'
+    }
   }
 };
